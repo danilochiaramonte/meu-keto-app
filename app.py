@@ -3,8 +3,9 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# Configuração da Página
-st.set_page_config(page_title="Keto Tracker", page_icon="🥑")
+# --- CONFIGURAÇÃO DA PÁGINA (AQUI ESTÁ O TRUQUE) ---
+# Adicionei layout="wide" para usar a tela inteira
+st.set_page_config(page_title="Keto Tracker", page_icon="🥑", layout="wide")
 
 # --- CONFIGURAÇÕES ---
 ARQUIVO_COMIDA = 'historico_keto.csv'
@@ -36,7 +37,7 @@ def deletar_refeicao(index):
 # --- INTERFACE DO APP ---
 st.title("🥑 Meu Keto Tracker")
 
-# Criamos 3 abas agora
+# Criamos 3 abas
 aba1, aba2, aba3 = st.tabs(["🍽️ Registrar", "📊 Relatórios", "✏️ Gerenciar"])
 
 # --- ABA 1: REGISTRAR ---
@@ -44,6 +45,7 @@ with aba1:
     st.header("Nova Refeição")
     nome = st.text_input("O que você comeu?", placeholder="Ex: 3 ovos com bacon")
     
+    # Colunas para os números ficarem lado a lado
     c1, c2, c3, c4 = st.columns(4)
     with c1: carbo = st.number_input("Carbo (g)", min_value=0.0, step=0.1)
     with c2: prot = st.number_input("Prot (g)", min_value=0.0, step=0.1)
@@ -54,7 +56,7 @@ with aba1:
         if nome:
             salvar_refeicao(nome, carbo, prot, gord, kcal)
             st.success(f"✅ {nome} registrado!")
-            st.rerun() # Atualiza a página na hora
+            st.rerun() 
         else:
             st.warning("Escreva o nome do alimento!")
 
@@ -68,57 +70,53 @@ with aba2:
         df_hoje = df[df['Data'] == hoje]
         
         if not df_hoje.empty:
-            # Totais
             total_carbo = df_hoje['Carbo'].sum()
             total_prot = df_hoje['Prot'].sum()
             total_gord = df_hoje['Gord'].sum()
             total_kcal = df_hoje['Kcal'].sum()
             
-            # Métricas
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Carbo", f"{total_carbo:.1f}g", delta=f"{META_CARBO - total_carbo:.1f}g resta", delta_color="inverse")
             c2.metric("Prot", f"{total_prot:.1f}g")
             c3.metric("Gord", f"{total_gord:.1f}g")
             c4.metric("Kcal", f"{total_kcal:.0f}")
             
-            # Barra de Progresso
             progresso = min(total_carbo / META_CARBO, 1.0)
-            st.write(f"Meta de Carbo: {int(progresso*100)}%")
-            if total_carbo < 25: st.success("🟢 Zona de Queima de Gordura!")
-            elif total_carbo < 35: st.warning("🟡 Atenção!")
-            else: st.error("🔴 Cuidado!")
+            if total_carbo < 25: st.success(f"🟢 Zona de Queima! ({int(progresso*100)}% da meta)")
+            elif total_carbo < 35: st.warning(f"🟡 Atenção! ({int(progresso*100)}% da meta)")
+            else: st.error(f"🔴 Cuidado! ({int(progresso*100)}% da meta)")
             st.progress(progresso)
             
             st.divider()
             st.write("Histórico de Hoje:")
-            st.dataframe(df_hoje, hide_index=True)
+            # use_container_width=True estica a tabela
+            st.dataframe(df_hoje, hide_index=True, use_container_width=True)
         else:
             st.info("Nada registrado hoje.")
             
-        # Botão para baixar backup
         st.divider()
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("💾 Baixar Backup Completo", csv, "backup_keto.csv", "text/csv")
     else:
         st.write("Sem dados.")
 
-# --- ABA 3: GERENCIAR (NOVA!) ---
+# --- ABA 3: GERENCIAR ---
 with aba3:
-    st.header("Editar Histórico")
-    st.write("Selecione uma refeição para excluir:")
+    st.header("Editar Histórico Completo")
+    st.info("Se a tabela estiver cortada, tente girar o celular ou maximizar a janela.")
     
     df = carregar_dados()
     if not df.empty:
-        # Mostra o Dataframe com o índice (número da linha)
-        st.dataframe(df)
+        # AQUI ESTÁ A MUDANÇA VISUAL DA TABELA
+        st.dataframe(df, use_container_width=True)
         
-        # Caixa de seleção para escolher qual apagar
-        # Criamos uma lista formatada: "Índice - Data - Nome"
+        st.divider()
+        st.subheader("🗑️ Área de Exclusão")
+        
         lista_opcoes = [f"{i} - {row['Data']} - {row['Cardápio']}" for i, row in df.iterrows()]
-        escolha = st.selectbox("Qual item apagar?", options=lista_opcoes)
+        escolha = st.selectbox("Selecione o item para apagar:", options=lista_opcoes)
         
-        if st.button("🗑️ Excluir Selecionado"):
-            # Pega o número do índice (o número antes do traço)
+        if st.button("Excluir Selecionado", type="primary"):
             index_to_drop = int(escolha.split(' - ')[0])
             deletar_refeicao(index_to_drop)
             st.success("Item apagado!")
