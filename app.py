@@ -76,14 +76,20 @@ with aba_food:
             else:
                 st.error("Digite o nome do alimento!")
 
-    # MOSTRAR LISTA RÁPIDA DE HOJE AQUI TAMBÉM
+    # --- LISTA RÁPIDA (ATUALIZADA) ---
+    st.divider()
     st.subheader("👇 Já registrado hoje:")
     df = carregar_comida()
     if not df.empty:
         hoje = datetime.now().strftime("%d/%m/%Y")
         df_hoje = df[df['Data'] == hoje]
         if not df_hoje.empty:
-            st.dataframe(df_hoje[['Cardápio', 'Carbo', 'Kcal']], use_container_width=True, hide_index=True)
+            # AGORA MOSTRA TUDO: Carbo, Prot, Gord e Kcal
+            st.dataframe(
+                df_hoje[['Cardápio', 'Carbo', 'Prot', 'Gord', 'Kcal']], 
+                use_container_width=True, 
+                hide_index=True
+            )
 
 # --- ABA 2: PESO ---
 with aba_weight:
@@ -111,7 +117,7 @@ with aba_weight:
         else:
             st.info("Nenhum peso registrado ainda.")
 
-# --- ABA 3: RELATÓRIOS (CORRIGIDA) ---
+# --- ABA 3: RELATÓRIOS ---
 with aba_reports:
     st.header("Resumo do Dia")
     
@@ -119,12 +125,10 @@ with aba_reports:
     if not df_food.empty:
         df_food['Data_Obj'] = pd.to_datetime(df_food['Data'], dayfirst=True)
         hoje_str = datetime.now().strftime("%d/%m/%Y")
-        
-        # Filtra hoje
         df_hoje = df_food[df_food['Data'] == hoje_str]
         
         if not df_hoje.empty:
-            # 1. TOTAIS
+            # TOTAIS
             total_c = df_hoje['Carbo'].sum()
             total_p = df_hoje['Prot'].sum()
             total_g = df_hoje['Gord'].sum()
@@ -139,7 +143,6 @@ with aba_reports:
             prog = min(total_c / META_CARBO, 1.0)
             st.progress(prog)
             
-            # 2. TABELA DETALHADA (QUE ESTAVA FALTANDO)
             st.divider()
             st.subheader(f"📝 Detalhes de Hoje ({hoje_str})")
             st.dataframe(df_hoje, use_container_width=True, hide_index=True)
@@ -148,8 +151,6 @@ with aba_reports:
             st.info("Nada registrado hoje.")
 
         st.divider()
-
-        # 3. GRÁFICO SEMANAL
         st.subheader("📈 Histórico da Semana (Carbos)")
         df_agrupado = df_food.groupby('Data')['Carbo'].sum().reset_index()
         df_agrupado['Data_Sort'] = pd.to_datetime(df_agrupado['Data'], dayfirst=True)
