@@ -11,7 +11,7 @@ ARQUIVO_COMIDA = 'historico_keto.csv'
 ARQUIVO_PESO = 'historico_peso.csv'
 META_CARBO = 30 
 
-# --- FUNÇÕES DE CARREGAMENTO ---
+# --- FUNÇÕES ---
 def carregar_comida():
     if not os.path.exists(ARQUIVO_COMIDA):
         df = pd.DataFrame(columns=['Data', 'Cardápio', 'Carbo', 'Prot', 'Gord', 'Kcal'])
@@ -26,7 +26,6 @@ def carregar_peso():
         return df
     return pd.read_csv(ARQUIVO_PESO)
 
-# --- FUNÇÕES DE SALVAMENTO ---
 def salvar_refeicao(cardapio, c, p, g, k):
     df = carregar_comida()
     nova_linha = {
@@ -54,7 +53,6 @@ def deletar_refeicao(index):
 # --- INTERFACE ---
 st.title("🥑 Painel de Controle Keto")
 
-# Criamos as 4 abas principais
 aba_food, aba_weight, aba_reports, aba_settings = st.tabs([
     "🍽️ Alimentação", "⚖️ Peso", "📊 Relatórios", "⚙️ Gerenciar"
 ])
@@ -74,20 +72,28 @@ with aba_food:
             if nome:
                 salvar_refeicao(nome, carbo, prot, gord, kcal)
                 st.toast(f"✅ {nome} salvo!")
-                st.rerun() # Atualiza a tela
+                st.rerun()
             else:
                 st.error("Digite o nome do alimento!")
+
+    # MOSTRAR LISTA RÁPIDA DE HOJE AQUI TAMBÉM
+    st.subheader("👇 Já registrado hoje:")
+    df = carregar_comida()
+    if not df.empty:
+        hoje = datetime.now().strftime("%d/%m/%Y")
+        df_hoje = df[df['Data'] == hoje]
+        if not df_hoje.empty:
+            st.dataframe(df_hoje[['Cardápio', 'Carbo', 'Kcal']], use_container_width=True, hide_index=True)
 
 # --- ABA 2: PESO ---
 with aba_weight:
     st.header("Controle de Peso")
-    
     col_input, col_graph = st.columns([1, 2])
     
     with col_input:
         with st.container(border=True):
-            st.subheader("Registrar Peso Hoje")
-            peso_hoje = st.number_input("Seu peso (kg)", 0.0, step=0.1, format="%.1f")
+            st.subheader("Registrar Peso")
+            peso_hoje = st.number_input("Peso (kg)", 0.0, step=0.1, format="%.1f")
             if st.button("⚖️ Salvar Peso"):
                 if peso_hoje > 0:
                     salvar_peso(peso_hoje)
@@ -95,73 +101,63 @@ with aba_weight:
                     st.rerun()
     
     with col_graph:
-        st.subheader("Sua Evolução")
+        st.subheader("Evolução")
         df_peso = carregar_peso()
         if not df_peso.empty:
-            # Tratamento de data para o gráfico ficar bonito
             df_peso['Data_Obj'] = pd.to_datetime(df_peso['Data'], dayfirst=True)
             df_peso = df_peso.sort_values('Data_Obj')
-            
-            # Gráfico de Linha
             st.line_chart(df_peso, x='Data', y='Peso')
-            
-            # Mostra o último peso
-            ultimo_peso = df_peso.iloc[-1]['Peso']
-            st.metric("Peso Atual", f"{ultimo_peso} kg")
+            st.metric("Peso Atual", f"{df_peso.iloc[-1]['Peso']} kg")
         else:
             st.info("Nenhum peso registrado ainda.")
 
-# --- ABA 3: RELATÓRIOS ---
+# --- ABA 3: RELATÓRIOS (CORRIGIDA) ---
 with aba_reports:
-    st.header("Relatórios de Performance")
+    st.header("Resumo do Dia")
     
     df_food = carregar_comida()
     if not df_food.empty:
-        # Prepara dados
         df_food['Data_Obj'] = pd.to_datetime(df_food['Data'], dayfirst=True)
         hoje_str = datetime.now().strftime("%d/%m/%Y")
         
-        # --- RESUMO DE HOJE ---
-        st.subheader(f"📅 Resumo de Hoje ({hoje_str})")
+        # Filtra hoje
         df_hoje = df_food[df_food['Data'] == hoje_str]
         
         if not df_hoje.empty:
+            # 1. TOTAIS
             total_c = df_hoje['Carbo'].sum()
             total_p = df_hoje['Prot'].sum()
             total_g = df_hoje['Gord'].sum()
             total_k = df_hoje['Kcal'].sum()
             
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Carbo", f"{total_c:.1f}g", f"{META_CARBO - total_c:.1f}g restante", delta_color="inverse")
-            col2.metric("Prot", f"{total_p:.1f}g")
-            col3.metric("Gord", f"{total_g:.1f}g")
-            col4.metric("Kcal", f"{total_k:.0f}")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Carbo", f"{total_c:.1f}g", f"{META_CARBO - total_c:.1f}g resta", delta_color="inverse")
+            c2.metric("Prot", f"{total_p:.1f}g")
+            c3.metric("Gord", f"{total_g:.1f}g")
+            c4.metric("Kcal", f"{total_k:.0f}")
             
-            # Barra de Progresso
             prog = min(total_c / META_CARBO, 1.0)
             st.progress(prog)
-            if total_c > 35: st.error("🚨 Cuidado! Carbos altos.")
-            elif total_c > 25: st.warning("⚠️ Atenção.")
-            else: st.success("✅ Na zona Keto!")
+            
+            # 2. TABELA DETALHADA (QUE ESTAVA FALTANDO)
+            st.divider()
+            st.subheader(f"📝 Detalhes de Hoje ({hoje_str})")
+            st.dataframe(df_hoje, use_container_width=True, hide_index=True)
+            
         else:
             st.info("Nada registrado hoje.")
 
         st.divider()
 
-        # --- RESUMO SEMANAL (GRÁFICOS) ---
-        st.subheader("📈 Histórico dos Últimos Dias")
-        
-        # Agrupa por dia
+        # 3. GRÁFICO SEMANAL
+        st.subheader("📈 Histórico da Semana (Carbos)")
         df_agrupado = df_food.groupby('Data')['Carbo'].sum().reset_index()
-        # Ordena por data (gambiarra pra ordenar string de data corretamente)
         df_agrupado['Data_Sort'] = pd.to_datetime(df_agrupado['Data'], dayfirst=True)
-        df_agrupado = df_agrupado.sort_values('Data_Sort').tail(7) # Pega os últimos 7 dias
-        
-        st.write("Consumo de Carboidratos (g) por dia:")
+        df_agrupado = df_agrupado.sort_values('Data_Sort').tail(7)
         st.bar_chart(df_agrupado, x='Data', y='Carbo')
         
     else:
-        st.write("Comece a registrar para ver os gráficos!")
+        st.write("Sem dados.")
 
 # --- ABA 4: GERENCIAR ---
 with aba_settings:
@@ -176,9 +172,3 @@ with aba_settings:
             deletar_refeicao(idx)
             st.success("Apagado!")
             st.rerun()
-    
-    st.divider()
-    # Backup
-    if not df.empty:
-        csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Baixar Planilha Completa", csv, "backup_keto.csv", "text/csv")
