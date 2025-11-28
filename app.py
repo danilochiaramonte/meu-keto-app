@@ -76,7 +76,6 @@ with aba_food:
             else:
                 st.error("Digite o nome do alimento!")
 
-    # --- LISTA RÁPIDA (ATUALIZADA) ---
     st.divider()
     st.subheader("👇 Já registrado hoje:")
     df = carregar_comida()
@@ -84,12 +83,7 @@ with aba_food:
         hoje = datetime.now().strftime("%d/%m/%Y")
         df_hoje = df[df['Data'] == hoje]
         if not df_hoje.empty:
-            # AGORA MOSTRA TUDO: Carbo, Prot, Gord e Kcal
-            st.dataframe(
-                df_hoje[['Cardápio', 'Carbo', 'Prot', 'Gord', 'Kcal']], 
-                use_container_width=True, 
-                hide_index=True
-            )
+            st.dataframe(df_hoje[['Cardápio', 'Carbo', 'Prot', 'Gord', 'Kcal']], use_container_width=True, hide_index=True)
 
 # --- ABA 2: PESO ---
 with aba_weight:
@@ -119,20 +113,25 @@ with aba_weight:
 
 # --- ABA 3: RELATÓRIOS ---
 with aba_reports:
-    st.header("Resumo do Dia")
+    st.header("Diário Alimentar")
     
     df_food = carregar_comida()
     if not df_food.empty:
-        df_food['Data_Obj'] = pd.to_datetime(df_food['Data'], dayfirst=True)
-        hoje_str = datetime.now().strftime("%d/%m/%Y")
-        df_hoje = df_food[df_food['Data'] == hoje_str]
+        col_date, col_vazia = st.columns([1, 3])
+        with col_date:
+            data_selecionada = st.date_input("📅 Escolha o dia:", datetime.now())
         
-        if not df_hoje.empty:
-            # TOTAIS
-            total_c = df_hoje['Carbo'].sum()
-            total_p = df_hoje['Prot'].sum()
-            total_g = df_hoje['Gord'].sum()
-            total_k = df_hoje['Kcal'].sum()
+        data_str = data_selecionada.strftime("%d/%m/%Y")
+        df_filtrada = df_food[df_food['Data'] == data_str]
+        
+        st.divider()
+        st.subheader(f"Resumo de: {data_str}")
+        
+        if not df_filtrada.empty:
+            total_c = df_filtrada['Carbo'].sum()
+            total_p = df_filtrada['Prot'].sum()
+            total_g = df_filtrada['Gord'].sum()
+            total_k = df_filtrada['Kcal'].sum()
             
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Carbo", f"{total_c:.1f}g", f"{META_CARBO - total_c:.1f}g resta", delta_color="inverse")
@@ -143,25 +142,59 @@ with aba_reports:
             prog = min(total_c / META_CARBO, 1.0)
             st.progress(prog)
             
-            st.divider()
-            st.subheader(f"📝 Detalhes de Hoje ({hoje_str})")
-            st.dataframe(df_hoje, use_container_width=True, hide_index=True)
-            
+            st.dataframe(df_filtrada, use_container_width=True, hide_index=True)
         else:
-            st.info("Nada registrado hoje.")
+            st.warning(f"Nenhum registro encontrado para o dia {data_str}.")
 
         st.divider()
-        st.subheader("📈 Histórico da Semana (Carbos)")
-        df_agrupado = df_food.groupby('Data')['Carbo'].sum().reset_index()
-        df_agrupado['Data_Sort'] = pd.to_datetime(df_agrupado['Data'], dayfirst=True)
-        df_agrupado = df_agrupado.sort_values('Data_Sort').tail(7)
-        st.bar_chart(df_agrupado, x='Data', y='Carbo')
+        st.subheader("📈 Visão Geral da Semana")
+        # Correção para evitar erro se a coluna não existir
+        if 'Data' in df_food.columns:
+             df_food['Data_Obj'] = pd.to_datetime(df_food['Data'], dayfirst=True)
+             df_agrupado = df_food.groupby('Data')['Carbo'].sum().reset_index()
+             df_agrupado['Data_Sort'] = pd.to_datetime(df_agrupado['Data'], dayfirst=True)
+             df_agrupado = df_agrupado.sort_values('Data_Sort').tail(7)
+             st.bar_chart(df_agrupado, x='Data', y='Carbo')
         
     else:
         st.write("Sem dados.")
 
-# --- ABA 4: GERENCIAR ---
+# --- ABA 4: GERENCIAR (O SEGREDO ESTÁ AQUI) ---
 with aba_settings:
+    st.header("Backup e Restauração")
+    st.info("Salve seus dados antes de sair!")
+    
+    c1, c2 = st.columns(2)
+    
+    # BOTÕES DE DOWNLOAD
+    with c1:
+        st.subheader("⬇️ 1. Baixar (Salvar)")
+        df = carregar_comida()
+        if not df.empty:
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("💾 Baixar Histórico Comida", csv, "historico_keto.csv", "text/csv")
+        else:
+            st.write("Sem histórico de comida para baixar.")
+            
+        df_p = carregar_peso()
+        if not df_p.empty:
+            csv_p = df_p.to_csv(index=False).encode('utf-8')
+            st.download_button("💾 Baixar Histórico Peso", csv_p, "historico_peso.csv", "text/csv")
+
+    # BOTÃO DE UPLOAD
+    with c2:
+        st.subheader("⬆️ 2. Restaurar")
+        uploaded_file = st.file_uploader("Enviar 'historico_keto.csv'", type="csv")
+        
+        if uploaded_file is not None:
+            try:
+                df_up = pd.read_csv(uploaded_file)
+                df_up.to_csv(ARQUIVO_COMIDA, index=False)
+                st.success("✅ Histórico Restaurado! Pode atualizar a página.")
+            except:
+                st.error("Arquivo inválido.")
+
+    st.divider()
     st.header("Correções")
     df = carregar_comida()
     if not df.empty:
